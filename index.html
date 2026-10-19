@@ -291,7 +291,9 @@ const DEFAULTS = {
   //   aporteETF: € al ETF cada mes; desde el primer mes que aparece empieza el reparto a Trade Republic
   //   (al ETF el aporte, y el resto por encima del colchón al efectivo remunerado).
   // proyeccion: meses que se proyectan en la gráfica (0 = solo datos reales).
-  settings: { proyeccion: 0, saldosFecha: null, valores: [], cuentas: [] },
+  // saldosMomento: instante exacto (ms) en que pusiste los saldos; sirve para saber si un gasto del MISMO día se anotó
+  // antes (ya está dentro del saldo) o después (hay que restarlo).
+  settings: { proyeccion: 0, saldosFecha: null, saldosMomento: null, valores: [], cuentas: [] },
   // months: cada dato vive en UN solo sitio y lo demás se calcula:
   //   m:'YYYY-MM' · ingresos (null = el previsto) · alquiler (null = el de Ajustes; si hay movs de alquiler, mandan ellos)
   //   gastos:{<categoría>: €}  → importes sin detalle (p. ej. importados)
@@ -340,6 +342,7 @@ function normalize(raw) {
   if (typeof rs.proyeccion === 'number') st.settings.proyeccion = rs.proyeccion;
   const esMes = v => /^\d{4}-\d{2}$/.test(v);
   st.settings.saldosFecha = /^\d{4}-\d{2}-\d{2}$/.test(rs.saldosFecha) ? rs.saldosFecha : null;
+  st.settings.saldosMomento = typeof rs.saldosMomento === 'number' ? rs.saldosMomento : null;
   // Valores con fecha. Formatos anteriores (valores sueltos + «cambios» + fecha de inversión) se convierten:
   // el valor suelto vale desde el primer mes con datos, y el aporte al ETF desde el mes en que se empezó a invertir.
   let valores = Array.isArray(rs.valores) ? rs.valores : null;
@@ -674,6 +677,15 @@ const invierteEn = m => state.settings.valores.some(c => c.parametro === 'aporte
 // mes) son histórico de gastos: tus saldos ya los reflejan.
 const inicioPlan = () => nextMonth((state.settings.saldosFecha || hoyISO()).slice(0, 7));
 
+// ¿Hay que restar este gasto suelto del saldo de partida? Sí si es de un día POSTERIOR a la fecha de los saldos, o si es
+// del MISMO día pero lo anotaste después de poner los saldos (el id lleva la hora de creación; los gastos sin ella,
+// como los importados, se dan por incluidos en el saldo).
+const creacionDe = x => { const t = parseInt(String(x.id).slice(0, 8), 36); return isFinite(t) ? t : 0; };
+const restaDelSaldo = x => {
+  const s = state.settings;
+  return x.f > s.saldosFecha || (x.f === s.saldosFecha && !!s.saldosMomento && creacionDe(x) > s.saldosMomento);
+};
+
 // Saldos de partida por bloque, sumando las cuentas de Ajustes. Valen a fecha `saldosFecha`: los gastos
 // sueltos anotados DESPUÉS de esa fecha en meses históricos se restan de la cuenta corriente.
 function saldosIniciales() {
@@ -684,7 +696,7 @@ function saldosIniciales() {
     const inicio = inicioPlan();
     for (const mes of state.months) {
       if (mes.m >= inicio) continue;
-      for (const x of mes.movs || []) if (x.f > s.saldosFecha) corr -= x.i;
+      for (const x of mes.movs || []) if (restaDelSaldo(x)) corr -= x.i;
     }
   }
   return { corr, cash: sum('efectivo'), etf: sum('etf') };
@@ -1243,7 +1255,7 @@ $('tabla').onclick = ev => {
   if (tr) { selMes = tr.dataset.m; fillForm(state.months.find(x => x.m === selMes)); render(); }
 };
 
-$('sFecha').addEventListener('change', () => { state.settings.saldosFecha = $('sFecha').value || null; save(); render(); });
+$('sFecha').addEventListener('change', () => { state.settings.saldosFecha = $('sFecha').value || null; state.settings.saldosMomento = null; save(); render(); });
 $('selProy').addEventListener('change', () => { state.settings.proyeccion = +$('selProy').value; save(); render(); });
 
 // Editor de «valores con fecha»: a partir de ese mes, el parámetro elegido toma el nuevo valor
@@ -1272,7 +1284,7 @@ $('cuentas').addEventListener('change', ev => {
   if (!row || !f) return;
   const c = state.settings.cuentas[+row.dataset.i];
   c[f] = f === 'saldo' ? (parseFloat(ev.target.value) || 0) : ev.target.value;
-  if (f === 'saldo') state.settings.saldosFecha = hoyISO();   // al corregir un saldo, vale a fecha de hoy
+  if (f === 'saldo') { state.settings.saldosFecha = hoyISO(); state.settings.saldosMomento = Date.now(); }   // el saldo corregido vale desde este momento
   save(); render();
 });
 $('cuentas').addEventListener('click', ev => {
