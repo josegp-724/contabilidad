@@ -306,7 +306,7 @@ const FS = 'showSaveFilePicker' in window;
 // Google Drive: permite usar la página desde el móvil y desde cualquier sitio, con el JSON guardado en tu Drive.
 // Pega aquí el «ID de cliente» de tu proyecto de Google Cloud (termina en .apps.googleusercontent.com). No es secreto.
 // Solo funciona con la página servida por https (Google no permite el inicio de sesión desde un archivo local).
-const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '225185947962-i3p250fa2duf09h5i57np64a2qh90ku9.apps.googleusercontent.com';
 const DRIVE = !!GOOGLE_CLIENT_ID && /^https?:$/.test(location.protocol);
 const HAY_ARCHIVO = FS || DRIVE;        // hay dónde escribir (archivo local o Drive); si no, localStorage + descargar/importar
 // Sin ninguna de las dos (Firefox, Safari…): los datos quedan en el navegador y se sincronizan a mano con
