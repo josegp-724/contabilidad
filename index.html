@@ -261,12 +261,14 @@
     </details>
   </div>
   </div><!-- /app -->
+  <div class="note" style="text-align:center;margin-top:20px">Versión <span id="version"></span></div>
 </div>
 
 <script>
 // ───────────────────────── Estado y persistencia ─────────────────────────
 const $ = id => document.getElementById(id);
 const KEY = 'contabilidadMensual.v1';
+const VERSION = '2026-10-19 · 2';               // se muestra abajo del todo: sirve para saber si tienes la última subida
 const ING_DEFECTO = 1500;                       // solo para rellenar el primer mes
 const CATS = [                                  // categorías de gasto variable (n: nombre, s: corto para la tabla)
   { k: 'delivery', n: 'Comida a domicilio', s: 'Domicilio', c: '--c-delivery' },
@@ -680,10 +682,18 @@ const inicioPlan = () => nextMonth((state.settings.saldosFecha || hoyISO()).slic
 // ¿Hay que restar este gasto suelto del saldo de partida? Sí si es de un día POSTERIOR a la fecha de los saldos, o si es
 // del MISMO día pero lo anotaste después de poner los saldos (el id lleva la hora de creación; los gastos sin ella,
 // como los importados, se dan por incluidos en el saldo).
-const creacionDe = x => { const t = parseInt(String(x.id).slice(0, 8), 36); return isFinite(t) ? t : 0; };
+const creacionDe = x => {                              // hora de creación (ms) si el id lo generó esta página; 0 si no
+  const id = String(x.id);
+  const t = /^[0-9a-z]{11}$/.test(id) ? parseInt(id.slice(0, 8), 36) : 0;
+  return t > 1.7e12 && t < 4e12 ? t : 0;
+};
 const restaDelSaldo = x => {
   const s = state.settings;
-  return x.f > s.saldosFecha || (x.f === s.saldosFecha && !!s.saldosMomento && creacionDe(x) > s.saldosMomento);
+  if (x.f > s.saldosFecha) return true;
+  if (x.f !== s.saldosFecha) return false;
+  // Mismo día. Con la hora de los saldos: cuenta si lo anotaste después. Sin ella (archivos anteriores), cuenta si lo
+  // anotó esta página (se supone que los saldos se pusieron al empezar) y no si viene importado.
+  return s.saldosMomento ? creacionDe(x) > s.saldosMomento : creacionDe(x) > 0;
 };
 
 // Saldos de partida por bloque, sumando las cuentas de Ajustes. Valen a fecha `saldosFecha`: los gastos
@@ -1325,6 +1335,7 @@ $('btnCols').onclick = () => {
   const full = $('tabla').classList.toggle('full');
   $('btnCols').textContent = full ? 'Ver menos columnas' : 'Ver todas las columnas';
 };
+$('version').textContent = VERSION;
 render();
 initFile();
 </script>
